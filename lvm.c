@@ -661,13 +661,12 @@ void draw_decorations(Window frame, int width, int height) {
  * Grab mouse buttons for window movement and resizing
  */
 void grab_buttons(Window client) {
-    XGrabButton(dpy, Button1, mouse_mod_mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(dpy, Button3, mouse_mod_mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(dpy, Button1, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
-    XGrabButton(dpy, Button3, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button1, mouse_mod_mask, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button3, mouse_mod_mask, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button1, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button3, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
     XGrabButton(dpy, Button1, AnyModifier, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
 }
-
 /*
  * Apply decorations and frame to a new client window
  */
@@ -854,27 +853,127 @@ void show_hidden_menu() {
             XSetForeground(dpy, gc, bdr_px);
             XDrawRectangle(dpy, menu, gc, 0, 0, menu_w - 1, menu_h - 1);
         } else if (ev.type == MotionNotify) {
-            int item = ev.xmotion.y / MENU_ITEM_H;
-            if (item >= 0 && item < count && item != selected) {
-                selected = item;
-                XClearArea(dpy, menu, 0, 0, 0, 0, True);
+            if (start.window) {
+                // Очищаем очередь событий движения, чтобы не было лагов (компрессия событий)
+                while (XCheckTypedEvent(dpy, MotionNotify, &ev));
+
+                int xdiff = ev.xbutton.x_root - drag_start.x;
+                int ydiff = ev.xbutton.y_root - drag_start.y;
+
+                if (start.button == Button3) {
+                    int new_w = drag_start.width + xdiff;
+                    int new_h = drag_start.height + ydiff;
+                    
+                    if (new_w < 50) new_w = 50;
+                    if (new_h < 50) new_h = 50;
+
+                    XResizeWindow(dpy, start.window, new_w, new_h);
+                    
+                    Window client = find_client_in_frame(start.window);
+                    if (client) {
+                        int client_h = new_h - TITLE_HEIGHT;
+                        if (client_h < 1) client_h = 1;
+                        XResizeWindow(dpy, client, new_w, client_h);
+                    }
+                }
+                else if (start.button == Button1) {
+                    XMoveWindow(dpy, start.window, 
+                                drag_start.window_x + xdiff, 
+                                drag_start.window_y + ydiff);
             }
-        } else if (ev.type == ButtonPress) {
-            if (selected >= 0 && selected < count) {
-                XMapWindow(dpy, hidden[selected].frame);
-                XRaiseWindow(dpy, hidden[selected].frame);
-                Window c = find_client_in_frame(hidden[selected].frame);
-                XSetInputFocus(dpy, c ? c : hidden[selected].frame,
-                               RevertToPointerRoot, CurrentTime);
-                focus_window = c;
-                done = 1;
+            else if (ev.type == ButtonPress) {
+                Window parent_frame = 0;
+                Window root_r, parent_r, *kids;
+                unsigned int n_kids;
+
+                if (XQueryTree(dpy, ev.xbutton.window, &root_r, &parent_r, &kids, &n_kids)) {
+                    if (parent_r != root && parent_r != 0) {
+                        parent_frame = parent_r;
+                    }
+                    else if (ev.xbutton.window != root) {
+                        parent_frame = ev.xbutton.window;
+                    }
+                    if (kids) {
+                        XFree(kids);
+                    }
+                }
+
+                int is_fs = 0;
+                Window client = find_client_in_frame(parent_frame);
+                for (int i = 0; i < client_count; i++) {
+                    if (clients[i].client == client && clients[i].is_fullscreen) {
+                        is_fs = 1;
+                    }
+                }
+
+                if (parent_frame != 0 && parent_frame != bar_win) {
+                    XRaiseWindow(dpy, parent_frame);
+                    if (ev.xbutton.subwindow == None) {
+                        XAllowEvents(dpy, ReplayPointer, CurrentTime);
+                    }
+                }
+
+                if (!is_fs) {
+                    if ((ev.xbutton.state & Mod1Mask) && ev.xbutton.button == Button3) {
+                        if (ev.xbutton.subwindow != None && ev.xbutton.subwindow != bar_win) {
+                            XWindowAttributes attr;
+                            XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
+                            start_ev = ev.xbutton;
+                            start_ev.window = ev.xbutton.subwindow;
+                            drag_state.start_root_x = ev.xbutton.x_root;
+                            drag_state.start_root_y = ev.xbutton.y_root;
+                            drag_state.win_x = attr.x;
+                            drag_state.win_y = attr.y;
+                            drag_state.win_w = attr.width;
+                            drag_state.win_h = attr.height;
+                            int rel_x = ev.xbutton.x_root - attr.x;
+                            int rel_y = ev.xbutton.y_root - attr.y;
+                            if (rel_x < attr.width / 3) {
+                                drag_state.resize_x_dir = -1;
+                            } else if (rel_x > attr.width * 2 / 3) {
+                                drag_state.resize_x_dir = 1;
+                            } else {
+                                drag_state.resize_x_dir = 0;
+                            }
+                            if (rel_y < attr.height / 3) {
+                                drag_state.resize_y_dir = -1;
+                            } else if (rel_y > attr.height * 2 / 3) {
+                                drag_state.resize_y_dir = 1;
+                            } else {
+                                drag_state.resize_y_dir = 0;
+                            }
+                            XGrabPointer(dpy, root, False, ButtonMotionMask | ButtonReleaseMask,
+                                        GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                            XRaiseWindow(dpy, start_ev.window);
+                        }
+                    }
+                    else if (ev.xbutton.window != root && ev.xbutton.window != bar_win &&
+                             ev.xbutton.y < TITLE_HEIGHT && ev.xbutton.button == Button1) {
+                        XWindowAttributes fa;
+                        XGetWindowAttributes(dpy, ev.xbutton.window, &fa);
+                        int btn_w = TITLE_HEIGHT;
+
+                        if (ev.xbutton.x < btn_w) {
+                            XDestroyWindow(dpy, ev.xbutton.window);
+                        }
+                        else if (ev.xbutton.x > (fa.width - btn_w)) {
+                            XUnmapWindow(dpy, ev.xbutton.window);
+                        }
+                        else {
+                            XRaiseWindow(dpy, ev.xbutton.window);
+                            XWindowAttributes attr;
+                            XGetWindowAttributes(dpy, ev.xbutton.window, &attr);
+                            drag_state.start_root_x = ev.xbutton.x_root;
+                            drag_state.start_root_y = ev.xbutton.y_root;
+                            drag_state.win_x = attr.x;
+                            drag_state.win_y = attr.y;
+                            start_ev = ev.xbutton;
+                            XGrabPointer(dpy, root, False, ButtonMotionMask | ButtonReleaseMask,
+                                        GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                        }
+                    }
+                }
             }
-        } else if (ev.type == KeyPress) {
-            KeySym ks = XLookupKeysym(&ev.xkey, 0);
-            if (ks == XK_Escape || ks == XK_q) {
-                done = 1;
-            }
-        }
     }
 
     XUngrabPointer(dpy, CurrentTime);
@@ -1215,8 +1314,10 @@ int main() {
                             drag_state.win_x = attr.x;
                             drag_state.win_y = attr.y;
                             start_ev = ev.xbutton;
-                            XGrabPointer(dpy, root, False, ButtonMotionMask | ButtonReleaseMask,
-                                        GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                            XGrabPointer(dpy, root, False, 
+                                ButtonMotionMask | ButtonReleaseMask, 
+                                GrabModeAsync, GrabModeAsync, 
+                                None, None, CurrentTime);
                         }
                     }
 
