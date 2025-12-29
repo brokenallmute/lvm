@@ -49,6 +49,7 @@ struct Config {
     char text_color[16];
     char line_color[16];
     char font_name[64];
+    char mouse_mod[16];
 } conf;
 
 /*
@@ -62,6 +63,7 @@ typedef struct {
 
 KeyBind binds[64];
 int bind_count = 0;
+unsigned int mouse_mod_mask = Mod1Mask;
 
 /*
  * Global constants for window layout
@@ -198,6 +200,8 @@ void create_default_config(const char* path) {
     fprintf(f, "LINE_COLOR    #FFFFFF\n\n");
     fprintf(f, "# Font selection (fixed, 6x13, 9x15, etc)\n");
     fprintf(f, "FONT          fixed\n\n");
+    fprintf(f, "# Mouse modifier (Mod1, Mod4, Shift, Control)\n");
+    fprintf(f, "MOUSE_MOD     Mod1\n\n");   
     fprintf(f, "# Keybindings configuration\n");
     fprintf(f, "# Syntax: BIND <MODIFIER> <KEY> <COMMAND>\n");
     fprintf(f, "BIND Mod4 Return xterm\n");
@@ -289,6 +293,9 @@ void load_config() {
                 strncpy(conf.font_name, val, MAX_FONT_STR - 1);
                 conf.font_name[MAX_FONT_STR - 1] = '\0';
             }
+            else if (strcmp(key, "MOUSE_MOD") == 0) {
+                strcpy(conf.mouse_mod, val);
+            }
         }
 
         char mod_str[MAX_MOD_STR], key_str[MAX_KEY_STR];
@@ -305,6 +312,9 @@ void load_config() {
     }
 
     fclose(f);
+
+    mouse_mod_mask = str_to_mod(conf.mouse_mod);
+    if (mouse_mod_mask == 0) mouse_mod_mask = Mod1Mask;
 
     if (bind_count == 0) {
         binds[0].mod = Mod4Mask;
@@ -648,6 +658,17 @@ void draw_decorations(Window frame, int width, int height) {
 }
 
 /*
+ * Grab mouse buttons for window movement and resizing
+ */
+void grab_buttons(Window client) {
+    XGrabButton(dpy, Button1, mouse_mod_mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button3, mouse_mod_mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button1, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button3, mouse_mod_mask|Mod2Mask, client, False, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button1, AnyModifier, client, False, ButtonPressMask, GrabModeSync, GrabModeAsync, None, None);
+}
+
+/*
  * Apply decorations and frame to a new client window
  */
 void frame_window(Window client) {
@@ -720,8 +741,7 @@ void frame_window(Window client) {
     XMapWindow(dpy, frame);
     XMapWindow(dpy, client);
     XAddToSaveSet(dpy, client);
-    XGrabButton(dpy, Button1, AnyModifier, client, False, ButtonPressMask,
-                GrabModeSync, GrabModeAsync, None, None);
+    grab_buttons(client);
 
     add_client(client, frame);
     update_client_list();
@@ -991,6 +1011,8 @@ int main() {
     int x11_fd = ConnectionNumber(dpy);
     XEvent ev;
 
+    XGrabButton(dpy, Button3, mouse_mod_mask, root, True, ButtonPressMask, GrabModeAsync, GrabModeAsync, None, None);
+
     while (1) {
         while (XPending(dpy)) {
             XNextEvent(dpy, &ev);
@@ -1129,7 +1151,7 @@ int main() {
                 }
 
                 if (!is_fs) {
-                    if ((ev.xbutton.state & Mod1Mask) && ev.xbutton.button == Button3) {
+                    if ((ev.xbutton.state & mouse_mod_mask) && ev.xbutton.button == Button3) {
                         if (ev.xbutton.subwindow != None && ev.xbutton.subwindow != bar_win) {
                             XWindowAttributes attr;
                             XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
@@ -1162,6 +1184,16 @@ int main() {
                             XRaiseWindow(dpy, start_ev.window);
                         }
                     }
+                    else if ((ev.xbutton.state & mouse_mod_mask) && ev.xbutton.button == Button1) {
+                        if (ev.xbutton.subwindow != None && ev.xbutton.subwindow != bar_win) {
+                            XWindowAttributes attr; XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
+                            start_ev = ev.xbutton; start_ev.window = ev.xbutton.subwindow;
+                            drag_state.start_root_x = ev.xbutton.x_root; drag_state.start_root_y = ev.xbutton.y_root;
+                            drag_state.win_x = attr.x; drag_state.win_y = attr.y;
+                            XGrabPointer(dpy, root, False, ButtonMotionMask|ButtonReleaseMask, GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                            XRaiseWindow(dpy, start_ev.window);
+                        }
+                    }
                     else if (ev.xbutton.window != root && ev.xbutton.window != bar_win &&
                              ev.xbutton.y < TITLE_HEIGHT && ev.xbutton.button == Button1) {
                         XWindowAttributes fa;
@@ -1187,6 +1219,7 @@ int main() {
                                         GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
                         }
                     }
+
                 }
             }
             else if (ev.type == MotionNotify && start_ev.window) {
