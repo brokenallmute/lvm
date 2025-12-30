@@ -1,26 +1,26 @@
-CC = clang
-CFLAGS = -O3 -march=native -fomit-frame-pointer -Wall
-LDFLAGS = -lX11
+CC ?= gcc
+PREFIX ?= /usr
+BINDIR ?= $(PREFIX)/bin
 
-SRC = lvm.c
-EXEC = lvm
-PREFIX = /usr
+CFLAGS += -Wall -Wextra -O2
+LIBS = -lX11
+
+SRC = lwm.c
+EXEC = lwm
 
 all: $(EXEC)
 
 $(EXEC): $(SRC)
-	$(CC) $(CFLAGS) -o $(EXEC) $(SRC) $(LDFLAGS)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LIBS)
 
 clean:
 	rm -f $(EXEC)
 
-install: all
-	@echo "Installing lvm to $(PREFIX)/bin..."
-	mkdir -p $(PREFIX)/bin
-	cp -f $(EXEC) $(PREFIX)/bin/
-	chmod 755 $(PREFIX)/bin/$(EXEC)
+install:
+	install -d $(DESTDIR)$(BINDIR)
+	install -m 755 $(EXEC) $(DESTDIR)$(BINDIR)/$(EXEC)
+
 uninstall:
-	rm -f $(PREFIX)/bin/$(EXEC)
-	@echo "lvm uninstalled."
+	rm -f $(DESTDIR)$(BINDIR)/$(EXEC)
 
 .PHONY: all clean install uninstall
