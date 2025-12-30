@@ -1087,6 +1087,33 @@ int main() {
                         XRaiseWindow(dpy, target);
                     }
                 }
+                else if (!is_fs && (ev.xbutton.state & mouse_mod_mask) && ev.xbutton.button == Button3) {
+                    XAllowEvents(dpy, AsyncPointer, CurrentTime);
+                    Window target = parent_frame ? parent_frame : ev.xbutton.subwindow;
+
+                    if (target != None && target != bar_win && target != root) {
+                        XWindowAttributes attr;
+                        XGetWindowAttributes(dpy, target, &attr);
+
+                        start_ev = ev.xbutton;
+                        start_ev.window = target;
+                        start_ev.button = Button3; 
+
+                        drag_state.start_root_x = ev.xbutton.x_root;
+                        drag_state.start_root_y = ev.xbutton.y_root;
+                        drag_state.win_x = attr.x;
+                        drag_state.win_y = attr.y;
+                        drag_state.win_w = attr.width;
+                        drag_state.win_h = attr.height;
+
+                        drag_state.resize_x_dir = (ev.xbutton.x_root > (attr.x + attr.width / 2)) ? 1 : -1;
+                        drag_state.resize_y_dir = (ev.xbutton.y_root > (attr.y + attr.height / 2)) ? 1 : -1;
+
+                        XGrabPointer(dpy, root, False, ButtonMotionMask | ButtonReleaseMask,
+                                    GrabModeAsync, GrabModeAsync, None, None, CurrentTime);
+                        XRaiseWindow(dpy, target);
+                    }
+                }
                 else if (!is_fs && ev.xbutton.window != root && ev.xbutton.window != bar_win &&
                          ev.xbutton.y < TITLE_HEIGHT && ev.xbutton.button == Button1) {
                     XAllowEvents(dpy, AsyncPointer, CurrentTime);
