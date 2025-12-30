@@ -626,7 +626,8 @@ void frame_window(Window client) {
                 type == wmatoms[NET_WM_WINDOW_TYPE_MENU] ||
                 type == wmatoms[NET_WM_WINDOW_TYPE_SPLASH] ||
                 type == wmatoms[NET_WM_WINDOW_TYPE_NOTIFICATION] ||
-                type == wmatoms[NET_WM_WINDOW_TYPE_UTILITY]) {
+                type == wmatoms[NET_WM_WINDOW_TYPE_UTILITY] || 
+                type == wmatoms[NET_WM_WINDOW_TYPE_DIALOG]) {
                 should_frame = 0;
             }
             XFree(prop);
