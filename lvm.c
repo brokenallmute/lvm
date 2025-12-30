@@ -1062,18 +1062,31 @@ int main() {
                  * Button1 (Left) - move window
                  * Button3 (Right) - resize window from corner/edge
                  */
-                int is_alt_drag = (ev.xbutton.state & Mod1Mask) && !((ev.xbutton.state & mouse_mod_mask) && (mouse_mod_mask != Mod1Mask));
-                int is_mod_drag = (ev.xbutton.state & mouse_mod_mask) && (mouse_mod_mask != Mod1Mask);
-
-                if (!is_fs && (is_alt_drag || is_mod_drag)) {
+                int pressed_mod = ev.xbutton.state & (Mod1Mask | mouse_mod_mask);
+                if (!is_fs && pressed_mod) {
                     if (ev.xbutton.button == Button1 || ev.xbutton.button == Button3) {
                         XAllowEvents(dpy, AsyncPointer, CurrentTime);
 
-                        if (ev.xbutton.subwindow != None && ev.xbutton.subwindow != bar_win) {
+                        Window target_frame = 0;
+
+                        Window frame_from_client = get_frame(ev.xbutton.window);
+                        if (frame_from_client) {
+                            target_frame = frame_from_client;
+                        }
+                        else if (find_client_in_frame(ev.xbutton.window)) {
+                            target_frame = ev.xbutton.window;
+                        }
+                        else if (ev.xbutton.subwindow) {
+                            target_frame = ev.xbutton.subwindow;
+                        }
+
+                        if (target_frame != 0 && target_frame != bar_win) {
                             XWindowAttributes attr;
-                            XGetWindowAttributes(dpy, ev.xbutton.subwindow, &attr);
+                            XGetWindowAttributes(dpy, target_frame, &attr);
+                            
                             start_ev = ev.xbutton;
-                            start_ev.window = ev.xbutton.subwindow;
+                            start_ev.window = target_frame;
+                            
                             drag_state.start_root_x = ev.xbutton.x_root;
                             drag_state.start_root_y = ev.xbutton.y_root;
                             drag_state.win_x = attr.x;
