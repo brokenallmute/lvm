@@ -599,81 +599,48 @@ void draw_decorations(Window frame, int width, int height) {
  * Apply decorations and frame to a new client window
  */
 void frame_window(Window client) {
-    if (!dpy || !client) {
-        return;
-    }
-
+    if (!dpy || !client) return;
     XWindowAttributes attrs;
-    if (XGetWindowAttributes(dpy, client, &attrs) == 0) {
-        return;
-    }
-    if (attrs.override_redirect) {
-        return;
-    }
+    if (XGetWindowAttributes(dpy, client, &attrs) == 0) return;
+    if (attrs.override_redirect) return;
 
-    Atom actual_type;
-    int actual_format;
-    unsigned long nitems, bytes_after;
-    Atom *prop = NULL;
-    int should_frame = 1;
-
-    if (XGetWindowProperty(dpy, client, wmatoms[NET_WM_WINDOW_TYPE], 0, 1, False, XA_ATOM,
-                           &actual_type, &actual_format, &nitems, &bytes_after,
-                           (unsigned char**)&prop) == Success) {
+    Atom actual_type; int actual_format; unsigned long nitems, bytes_after; Atom *prop = NULL; int should_frame = 1;
+    if (XGetWindowProperty(dpy, client, wmatoms[NET_WM_WINDOW_TYPE], 0, 1, False, XA_ATOM, 
+        &actual_type, &actual_format, &nitems, &bytes_after, (unsigned char**)&prop) == Success) {
         if (prop) {
             Atom type = prop[0];
-            if (type == wmatoms[NET_WM_WINDOW_TYPE_DOCK] ||
+            if (type == wmatoms[NET_WM_WINDOW_TYPE_DOCK] || 
                 type == wmatoms[NET_WM_WINDOW_TYPE_MENU] ||
-                type == wmatoms[NET_WM_WINDOW_TYPE_SPLASH] ||
+                type == wmatoms[NET_WM_WINDOW_TYPE_SPLASH] || 
                 type == wmatoms[NET_WM_WINDOW_TYPE_NOTIFICATION] ||
-                type == wmatoms[NET_WM_WINDOW_TYPE_UTILITY]) {
-                should_frame = 0;
+                type == wmatoms[NET_WM_WINDOW_TYPE_UTILITY] ||
+                type == wmatoms[NET_WM_WINDOW_TYPE_DIALOG]) {
+                should_frame = 0; 
             }
             XFree(prop);
         }
     }
 
-    if (!should_frame) {
-        XMapWindow(dpy, client);
-        add_client(client, 0);
-        update_client_list();
-        return;
+    if (!should_frame) { 
+        XMapWindow(dpy, client); 
+        grab_buttons(client); 
+        add_client(client, 0); 
+        update_client_list(); 
+        return; 
     }
 
-    int w = attrs.width;
-    int h = attrs.height;
-    if (w < MIN_SIZE || h < MIN_SIZE) {
-        w = DEFAULT_WINDOW_WIDTH;
-        h = DEFAULT_WINDOW_HEIGHT;
-        XResizeWindow(dpy, client, w, h);
-    }
+    int w = attrs.width; int h = attrs.height; if (w < MIN_SIZE || h < MIN_SIZE) { w = 800; h = 500; XResizeWindow(dpy, client, w, h); }
+    int sw = DisplayWidth(dpy, DefaultScreen(dpy)); int sh = DisplayHeight(dpy, DefaultScreen(dpy));
+    int x = (sw - w) / 2; int y = (sh - h) / 2; if (y < BAR_HEIGHT) y = BAR_HEIGHT;
 
-    int sw = DisplayWidth(dpy, DefaultScreen(dpy));
-    int sh = DisplayHeight(dpy, DefaultScreen(dpy));
-    int x = (sw - w) / 2;
-    int y = (sh - h) / 2;
-    if (y < BAR_HEIGHT) {
-        y = BAR_HEIGHT;
-    }
-
-    Window frame = XCreateSimpleWindow(dpy, root, x, y, w, h + TITLE_HEIGHT, 1,
-                                       get_pixel(conf.border_color),
-                                       get_pixel(conf.bar_color));
-
+    Window frame = XCreateSimpleWindow(dpy, root, x, y, w, h + TITLE_HEIGHT, 1, get_pixel(conf.border_color), get_pixel(conf.bar_color));
+    
     XSelectInput(dpy, client, StructureNotifyMask | PropertyChangeMask);
-    XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask |
-                 ButtonPressMask | ButtonReleaseMask | ExposureMask | EnterWindowMask);
+    XSelectInput(dpy, frame, SubstructureRedirectMask | SubstructureNotifyMask | ButtonPressMask | ButtonReleaseMask | ExposureMask | EnterWindowMask);
     XReparentWindow(dpy, client, frame, 0, TITLE_HEIGHT);
-    XMapWindow(dpy, frame);
-    XMapWindow(dpy, client);
-    XAddToSaveSet(dpy, client);
-    XGrabButton(dpy, Button1, mouse_mod_mask, client, False, ButtonPressMask,
-                GrabModeSync, GrabModeAsync, None, None);
-    XGrabButton(dpy, Button3, mouse_mod_mask, client, False, ButtonPressMask,
-                GrabModeSync, GrabModeAsync, None, None);
-
-    add_client(client, frame);
-    update_client_list();
+    XMapWindow(dpy, frame); XMapWindow(dpy, client); XAddToSaveSet(dpy, client);
+    grab_buttons(client);
+    add_client(client, frame); update_client_list();
 }
 
 /*
