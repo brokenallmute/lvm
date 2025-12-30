@@ -670,9 +670,15 @@ void frame_window(Window client) {
     XMapWindow(dpy, frame);
     XMapWindow(dpy, client);
     XAddToSaveSet(dpy, client);
+    /* Grab with configured mouse modifier */
     XGrabButton(dpy, Button1, mouse_mod_mask, client, False, ButtonPressMask,
                 GrabModeSync, GrabModeAsync, None, None);
     XGrabButton(dpy, Button3, mouse_mod_mask, client, False, ButtonPressMask,
+                GrabModeSync, GrabModeAsync, None, None);
+    /* Also grab with Alt (Mod1) so Alt+RMB/LMB on clients works as expected */
+    XGrabButton(dpy, Button1, Mod1Mask, client, False, ButtonPressMask,
+                GrabModeSync, GrabModeAsync, None, None);
+    XGrabButton(dpy, Button3, Mod1Mask, client, False, ButtonPressMask,
                 GrabModeSync, GrabModeAsync, None, None);
 
     add_client(client, frame);
@@ -1059,11 +1065,13 @@ int main() {
 
                 /*
                  * Handle window dragging and resizing with modifiers
-                 * Button1 (Left) - move window
-                 * Button3 (Right) - resize window from corner/edge
+                 * - Button1 (Left) with mouse modifier or Alt -> move
+                 * - Button3 (Right) with configured mouse modifier -> resize
+                 * - Button3 with Alt (Mod1) -> move (preserve Alt+RMB behavior)
                  */
-                int pressed_mod = ev.xbutton.state & (Mod1Mask | mouse_mod_mask);
-                if (!is_fs && pressed_mod) {
+                int used_mouse_mod = ev.xbutton.state & mouse_mod_mask;
+                int used_alt = ev.xbutton.state & Mod1Mask;
+                if (!is_fs && (used_mouse_mod || used_alt)) {
                     if (ev.xbutton.button == Button1 || ev.xbutton.button == Button3) {
                         XAllowEvents(dpy, AsyncPointer, CurrentTime);
 
@@ -1085,6 +1093,10 @@ int main() {
                             XGetWindowAttributes(dpy, target_frame, &attr);
                             
                             start_ev = ev.xbutton;
+                            /* If user used Alt+RMB, treat it as a move (like Button1) */
+                            if (ev.xbutton.button == Button3 && used_alt) {
+                                start_ev.button = Button1;
+                            }
                             start_ev.window = target_frame;
 
                             drag_state.start_root_x = ev.xbutton.x_root;
@@ -1094,7 +1106,7 @@ int main() {
                             drag_state.win_w = attr.width;
                             drag_state.win_h = attr.height;
 
-                            if (ev.xbutton.button == Button3) {
+                            if (ev.xbutton.button == Button3 && used_mouse_mod) {
                                 int rel_x = ev.xbutton.x_root - attr.x;
                                 int rel_y = ev.xbutton.y_root - attr.y;
 
@@ -1128,7 +1140,7 @@ int main() {
                         }
                     }
                 } else if (!is_fs && ev.xbutton.window != root && ev.xbutton.window != bar_win &&
-                          ev.xbutton.y < TITLE_HEIGHT && ev.xbutton.button == Button1) {
+                          ev.xbutton.y < TITLE_HEIGHT && (ev.xbutton.button == Button1 || (ev.xbutton.button == Button3 && (ev.xbutton.state & Mod1Mask)))) {
                     /*
                      * Drag by title bar
                      */
