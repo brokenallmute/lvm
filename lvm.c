@@ -1151,10 +1151,16 @@ int main() {
                 }
 
             } else if (ev.type == MotionNotify && start_ev.window) {
-                while (XCheckTypedEvent(dpy, MotionNotify, &ev));
+                /*
+                 * Drain any extra MotionNotify events and use the
+                 * last one for smooth movement. Use xmotion fields
+                 * (not xbutton) to get correct root coordinates.
+                 */
+                XEvent mev = ev;
+                while (XCheckTypedEvent(dpy, MotionNotify, &mev));
 
-                int xdiff = ev.xbutton.x_root - drag_state.start_root_x;
-                int ydiff = ev.xbutton.y_root - drag_state.start_root_y;
+                int xdiff = mev.xmotion.x_root - drag_state.start_root_x;
+                int ydiff = mev.xmotion.y_root - drag_state.start_root_y;
 
                 if (start_ev.button == Button3) {
                     int new_x = drag_state.win_x;
@@ -1198,7 +1204,7 @@ int main() {
 
                 } else if (start_ev.button == Button1) {
                     XMoveWindow(dpy, start_ev.window, drag_state.win_x + xdiff,
-                               drag_state.win_y + ydiff);
+                                drag_state.win_y + ydiff);
                 }
 
             } else if (ev.type == ButtonRelease) {
