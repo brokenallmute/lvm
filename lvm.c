@@ -1165,11 +1165,6 @@ int main() {
                 }
 
             } else if (ev.type == MotionNotify && start_ev.window) {
-                /*
-                 * Drain any extra MotionNotify events and use the
-                 * last one for smooth movement. Use xmotion fields
-                 * (not xbutton) to get correct root coordinates.
-                 */
                 XEvent mev = ev;
                 while (XCheckTypedEvent(dpy, MotionNotify, &mev));
 
@@ -1183,30 +1178,30 @@ int main() {
                     int new_h = drag_state.win_h;
 
                     if (drag_state.resize_x_dir == 1) {
-                        new_w += xdiff;
+                        new_w = drag_state.win_w + xdiff;
                     } else if (drag_state.resize_x_dir == -1) {
-                        new_w -= xdiff;
-                        new_x += xdiff;
+                        new_w = drag_state.win_w - xdiff;
+                        new_x = drag_state.win_x + xdiff;
                     }
 
                     if (drag_state.resize_y_dir == 1) {
-                        new_h += ydiff;
+                        new_h = drag_state.win_h + ydiff;
                     } else if (drag_state.resize_y_dir == -1) {
-                        new_h -= ydiff;
-                        new_y += ydiff;
+                        new_h = drag_state.win_h - ydiff;
+                        new_y = drag_state.win_y + ydiff;
                     }
 
                     if (new_w < MIN_SIZE) {
                         new_w = MIN_SIZE;
                         if (drag_state.resize_x_dir == -1) {
-                            new_x = drag_state.win_x + (drag_state.win_w - MIN_SIZE);
+                            new_x = drag_state.win_x + drag_state.win_w - MIN_SIZE;
                         }
                     }
 
                     if (new_h < MIN_SIZE) {
                         new_h = MIN_SIZE;
                         if (drag_state.resize_y_dir == -1) {
-                            new_y = drag_state.win_y + (drag_state.win_h - MIN_SIZE);
+                            new_y = drag_state.win_y + drag_state.win_h - MIN_SIZE;
                         }
                     }
 
@@ -1215,12 +1210,12 @@ int main() {
                     if (client) {
                         XResizeWindow(dpy, client, new_w, new_h - TITLE_HEIGHT);
                     }
+                    draw_decorations(start_ev.window, new_w, new_h - TITLE_HEIGHT);
 
                 } else if (start_ev.button == Button1) {
                     XMoveWindow(dpy, start_ev.window, drag_state.win_x + xdiff,
                                 drag_state.win_y + ydiff);
                 }
-
             } else if (ev.type == ButtonRelease) {
                 if (start_ev.window) {
                     XUngrabPointer(dpy, CurrentTime);
