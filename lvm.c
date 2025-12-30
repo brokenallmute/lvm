@@ -1095,23 +1095,28 @@ int main() {
                             drag_state.win_h = attr.height;
 
                             if (ev.xbutton.button == Button3) {
-                                /* Right-click: resize from corner/edge */
-                                int rel_x = ev.xbutton.x_root - attr.x;
-                                int rel_y = ev.xbutton.y_root - attr.y;
+                                    /* Right-click: resize from corner/edge */
+                                    int rel_x = ev.xbutton.x_root - attr.x;
+                                    int rel_y = ev.xbutton.y_root - attr.y;
 
-                                if (rel_x < attr.width / 3) {
-                                    drag_state.resize_x_dir = -1;
-                                } else if (rel_x > attr.width * 2 / 3) {
-                                    drag_state.resize_x_dir = 1;
+                                    if (rel_x < attr.width / 3) {
+                                        drag_state.resize_x_dir = -1;
+                                    } else if (rel_x > attr.width * 2 / 3) {
+                                        drag_state.resize_x_dir = 1;
+                                    } else {
+                                        drag_state.resize_x_dir = 1;
+                                    }
+
+                                    if (rel_y < attr.height / 3) {
+                                        drag_state.resize_y_dir = -1;
+                                    } else if (rel_y > attr.height * 2 / 3) {
+                                        drag_state.resize_y_dir = 1;
+                                    } else {
+                                        drag_state.resize_y_dir = 1;
+                                    }
                                 } else {
+                                    /* Left-click: move window anywhere */
                                     drag_state.resize_x_dir = 0;
-                                }
-
-                                if (rel_y < attr.height / 3) {
-                                    drag_state.resize_y_dir = -1;
-                                } else if (rel_y > attr.height * 2 / 3) {
-                                    drag_state.resize_y_dir = 1;
-                                } else {
                                     drag_state.resize_y_dir = 0;
                                 }
                             } else {
@@ -1125,7 +1130,6 @@ int main() {
                             XRaiseWindow(dpy, start_ev.window);
                         }
                     }
-
                 } else if (!is_fs && ev.xbutton.window != root && ev.xbutton.window != bar_win &&
                           ev.xbutton.y < TITLE_HEIGHT && ev.xbutton.button == Button1) {
                     /*
