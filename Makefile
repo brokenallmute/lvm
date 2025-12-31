@@ -3,7 +3,7 @@ PREFIX ?= /usr
 BINDIR ?= $(PREFIX)/bin
 
 CFLAGS += -Wall -Wextra -O2
-LIBS = -lX11
+LIBS = -lX11 -lXinerama
 
 SRC = lwm.c
 EXEC = lwm
